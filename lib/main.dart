@@ -1,9 +1,10 @@
 import 'package:english_words/english_words.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:web_socket_channel/io.dart';
 import 'package:esp32/ESP32.dart';
-
+import 'package:esp32/test.dart';
 void main() {
   runApp(ESP32());
 }
@@ -14,7 +15,7 @@ class ESP32 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (context) => UIState(),
+      create: (context) => WebSocketProvider(),
       child: MaterialApp(
         title: 'Namer App',
         theme: ThemeData(
@@ -27,27 +28,58 @@ class ESP32 extends StatelessWidget {
   }
 }
 
-class UIState extends ChangeNotifier {
-  var current = WordPair.random();
+class WebSocketProvider extends ChangeNotifier {
+  double initialVolt = 0; 
+  double finalVolt = 0;
+  double distance = 0;
+  late IOWebSocketChannel channel;
+  bool connected = false; //boolean value to track if WebSocket is connected
 
-  void getNext() {
-    current = WordPair.random();
-    notifyListeners();
-  }
 
-  var favorites = <WordPair>[];
-
-  void toggleFavorite() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
-    } else {
-      favorites.add(current);
+  void channelconnect(){ //function to connect 
+    try{
+        channel = IOWebSocketChannel.connect("ws://192.168.0.1:81"); //channel IP : Port
+        channel.stream.listen((message){
+            print(message);
+            print(message);
+            String data = message;
+            String test = data.substring(0,3);
+            if(message == "connected"){
+              connected = true; //message is "connected" from NodeMCU
+            }
+            else if (data.substring(0,3) == "Vf:"){
+            finalVolt = double.parse(data.substring(3));
+            }
+            else if (data.substring(0,3) == "Vi:"){
+            initialVolt = double.parse(data.substring(3));
+            notifyListeners();
+            }
+            else if (data.substring(0,3) == "di:"){
+            distance = double.parse(data.substring(3));
+            notifyListeners();
+            }
+        }, 
+        onDone: () {
+          //if WebSocket is disconnected
+          print("Web socket is closed");
+          connected = false;
+        },
+        onError: (error) {
+             print(error.toString());
+        },);
+    }catch (_){
+      print("error on connecting to websocket.");
     }
-    notifyListeners();
   }
-
-  
-
+  Future<void> sendcmd(String cmd) async {
+         if(connected == true){       
+            channel.sink.add(cmd); //sending Command to NodeMCU
+         }else{
+            channelconnect();
+            print("Websocket is not connected.");
+         }
+         notifyListeners();
+  }
 }
 
 class MyHomePage extends StatefulWidget {
@@ -57,22 +89,22 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   var selectedIndex = 0;
-
   @override
+
   Widget build(BuildContext context) {
     Widget page;
     switch (selectedIndex) {
       case 0:
         page = GeneratorPage();
         break;
-      case 1:
-        page = FavoritesPage();
-        break;
-      case 2:
-        page = MeasuringPage();
-        break;
+      // case 1:
+      //   page = FavoritesPage();
+      //   break;
+      // case 2:
+      //   page = TestPage();
+      //   break;
       default:
-        throw UnimplementedError('no widget for $selectedIndex');
+        page = GeneratorPage();
     }
 
     return LayoutBuilder(builder: (context, constraints) {
@@ -120,36 +152,63 @@ class _MyHomePageState extends State<MyHomePage> {
 class GeneratorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    var appState = context.watch<UIState>();
-    var pair = appState.current;
-
-    IconData icon;
-    if (appState.favorites.contains(pair)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_border;
-    }
-
+    var appState = context.watch<WebSocketProvider>();
+    appState.initialVolt.toString();
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          BigCard(pair: pair),
-          SizedBox(height: 10),
+          DataTable(
+      columns: const <DataColumn>[
+        DataColumn(
+          label: Expanded(
+            child: Text(
+              'V1',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+        ),
+        DataColumn(
+          label: Expanded(
+            child: Text(
+              'V2',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+        ),
+        DataColumn(
+          label: Expanded(
+            child: Text(
+              'Distance',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+        ),
+      ],
+      rows: <DataRow>[
+        DataRow(
+          cells: <DataCell>[
+            DataCell(Text(appState.initialVolt.toString())),
+            DataCell(Text(appState.finalVolt.toString())),
+            DataCell(Text(appState.distance.toString())),
+          ],
+        ),
+      ],
+    ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               ElevatedButton.icon(
                 onPressed: () {
-                  appState.toggleFavorite();
+                  appState.sendcmd('toggleData');
                 },
-                icon: Icon(icon),
-                label: Text('Like'),
+                icon: Icon(CupertinoIcons.add),
+                label: Text('Add'),
               ),
               SizedBox(width: 10),
               ElevatedButton(
                 onPressed: () {
-                  appState.getNext();
+                  appState.sendcmd('toggleData');
                 },
                 child: Text('Next'),
               ),
@@ -161,59 +220,33 @@ class GeneratorPage extends StatelessWidget {
   }
 }
 
-class BigCard extends StatelessWidget {
-  const BigCard({
-    super.key,
-    required this.pair,
-  });
 
-  final WordPair pair;
+// class FavoritesPage extends StatelessWidget {
+//   @override
+//   Widget build(BuildContext context) {
+//     var appState = context.watch<UIState>();
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.displayMedium!.copyWith(
-      color: theme.colorScheme.onPrimary,
-    );
+//     if (appState.favorites.isEmpty) {
+//       return Center(
+//         child: Text('No favorites yet.'),
+//       );
+//     }
 
-    return Card(
-      color: theme.colorScheme.primary,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Text(
-          pair.asLowerCase,
-          style: style,
-          semanticsLabel: "${pair.first} ${pair.second}",
-        ),
-      ),
-    );
-  }
-}
+//     return ListView(
+//       children: [
+//         Padding(
+//           padding: const EdgeInsets.all(20),
+//           child: Text('You have '
+//               '${appState.favorites.length} favorites:'),
+//         ),
+//         for (var pair in appState.favorites)
+//           ListTile(
+//             leading: Icon(Icons.favorite),
+//             title: Text(pair.asLowerCase),
+//           ),
+//       ],
+//     );
+//   }
+// }
 
-class FavoritesPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<UIState>();
 
-    if (appState.favorites.isEmpty) {
-      return Center(
-        child: Text('No favorites yet.'),
-      );
-    }
-
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text('You have '
-              '${appState.favorites.length} favorites:'),
-        ),
-        for (var pair in appState.favorites)
-          ListTile(
-            leading: Icon(Icons.favorite),
-            title: Text(pair.asLowerCase),
-          ),
-      ],
-    );
-  }
-}
