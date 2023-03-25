@@ -10,8 +10,8 @@
 #define POT_PIN 36
 #define BUTTON_PIN 0
 
-const char *ssid = "Jackie";           // replace
-const char *password = "mte201device"; // replace
+const char *ssid = "";     // Name for websocket
+const char *password = ""; // Password for websocket
 const char *msg_data_state = "toggleData";
 const char *msg_get_data = "getDataState";
 
