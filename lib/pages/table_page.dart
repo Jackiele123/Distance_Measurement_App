@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+class Data {
+  int ID;
+  double finalVolt, initialVolt, trueDistance, measuredDistance;
+
+  Data (this.ID, this.finalVolt, this.initialVolt, this.trueDistance, this.measuredDistance);
+
+}
+
 class TablePage extends StatefulWidget {
   const TablePage({super.key});
 

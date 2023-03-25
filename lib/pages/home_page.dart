@@ -78,7 +78,7 @@ class HomePage extends StatelessWidget {
                 onPressed: () {
                   appState.sendcmd('toggleData');
                 },
-                icon: const Icon(CupertinoIcons.waveform),
+                icon: const Icon(CupertinoIcons.waveform_path_ecg),
                 label: const Text('Next'),
               ),
             ],

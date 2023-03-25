@@ -38,7 +38,7 @@ class WebSocketProvider extends ChangeNotifier {
   double distance = 0;
   late IOWebSocketChannel channel;
   bool connected = false; //boolean value to track if WebSocket is connected
-
+  
   void channelconnect() {
     //function to connect
     try {
